@@ -8,8 +8,8 @@ import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiArrayType;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.util.PsiUtil;
-import com.zhanglinwei.zTools.constant.TypeEnum;
-import com.zhanglinwei.zTools.model.FieldInfo;
+import com.zhanglinwei.zTools.doc.apidoc.constant.TypeEnum;
+import com.zhanglinwei.zTools.doc.apidoc.model.FieldInfo;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -21,7 +21,7 @@ public class JsonUtil {
 
     private JsonUtil(){}
 
-    private static final Gson gson = new GsonBuilder().excludeFieldsWithModifiers(Modifier.STATIC, Modifier.FINAL).setPrettyPrinting().create();
+    public static final Gson gson = new GsonBuilder().excludeFieldsWithModifiers(Modifier.STATIC, Modifier.FINAL).setPrettyPrinting().create();
 
     public static String buildPrettyJson(List<FieldInfo> children) {
         return gson.toJson(getStringObjectMap(children));

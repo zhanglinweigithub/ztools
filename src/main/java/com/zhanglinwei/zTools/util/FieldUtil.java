@@ -2,18 +2,20 @@ package com.zhanglinwei.zTools.util;
 
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiUtil;
-import com.zhanglinwei.zTools.constant.JacksonAnnotation;
-import com.zhanglinwei.zTools.constant.SwaggerAnnotation;
-import com.zhanglinwei.zTools.constant.TypeEnum;
-import com.zhanglinwei.zTools.constant.WebAnnotation;
-import com.zhanglinwei.zTools.model.FieldInfo;
-import com.zhanglinwei.zTools.normal.RequireAndRange;
+import com.zhanglinwei.zTools.doc.apidoc.constant.JacksonAnnotation;
+import com.zhanglinwei.zTools.doc.apidoc.constant.SwaggerAnnotation;
+import com.zhanglinwei.zTools.doc.apidoc.constant.TypeEnum;
+import com.zhanglinwei.zTools.doc.apidoc.constant.WebAnnotation;
+import com.zhanglinwei.zTools.doc.apidoc.model.FieldInfo;
+import com.zhanglinwei.zTools.doc.apidoc.normal.RequireAndRange;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 字段工具类
@@ -233,11 +235,7 @@ public class FieldUtil {
 
     /** 是否Map */
     public static boolean isMapType(String typeName) {
-        List<String> mapList = Arrays.asList("Map","HashMap","LinkedHashMap","JSONObject");
-        if(mapList.contains(typeName)) {
-            return true;
-        }
-        return typeName.startsWith("Map<") || typeName.startsWith("HashMap<") || typeName.startsWith("LinkedHashMap<");
+        return isMapFamily(typeName);
     }
 
     /** 是否简单集合 */
@@ -247,14 +245,49 @@ public class FieldUtil {
 
     /** 是否简单集合 */
     public static boolean isNormalCollectionType(String typeName) {
-        typeName = typeName
-                .replace("List", "")
-                .replace("Set", "")
-                .replace("Collection", "")
-                .replace(">", "")
-                .replace("<", "");
+        if (!isListFamily(typeName)) {
+            return false;
+        }
+        String regex = "(\\w+)(<(.+?)>)?";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(typeName);
+        if (matcher.matches()) {
+            String baseType = matcher.group(1); // 基础类型，例如 ArrayList, HashMap
+            String genericContent = matcher.group(2); // 泛型内容，例如 <String> 或 <String, Integer>
 
-        return isNormalType(typeName) || typeName.contains("Map");
+            if (genericContent != null) {
+                // 获得尖括号中的嵌套内容
+                typeName = genericContent.replaceAll("[<>]", "");
+            }
+        }
+
+        return isNormalType(typeName) || isMapFamily(typeName);
+    }
+
+    public static boolean isListFamily(String typeString) {
+        return typeString.startsWith("ArrayList") ||
+                typeString.startsWith("LinkedList") ||
+                typeString.startsWith("Vector") ||
+                typeString.startsWith("List") ||
+                typeString.startsWith("Set") ||
+                typeString.startsWith("TreeSet") ||
+                typeString.startsWith("HashSet") ||
+                typeString.startsWith("LinkedHashSet") ||
+                typeString.startsWith("BitSet") ||
+                typeString.startsWith("SortedSet")
+                ;
+    }
+
+    private static boolean isMapFamily(String typeString) {
+        return typeString.startsWith("Map") ||
+                typeString.startsWith("HashMap") ||
+                typeString.startsWith("LinkedHashMap") ||
+                typeString.startsWith("ConcurrentHashMap") ||
+                typeString.startsWith("ConcurrentMap") ||
+                typeString.startsWith("Hashtable") ||
+                typeString.startsWith("SortedMap") ||
+                typeString.startsWith("TreeMap")
+                ;
     }
 
     /** 是否简单数组 */
@@ -300,6 +333,27 @@ public class FieldUtil {
         return false;
     }
 
+    /** 是否final字段 */
+    public static boolean isFinalField(PsiField psiField) {
+        PsiModifierList modifierList = psiField.getModifierList();
+        if(modifierList == null) {
+            return false;
+        }
+        for (PsiElement child : modifierList.getChildren()) {
+            if(child instanceof PsiKeyword) {
+                if(child.getText().equals("final")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 是否static、final字段 */
+    public static boolean isStaticOrFinalField(PsiField psiField) {
+        return isFinalField(psiField) || isStaticField(psiField);
+    }
+
     /** 是否忽略字段 */
     public static boolean isIgnoredField(PsiField psiField) {
         PsiAnnotation[] annotations = psiField.getAnnotations();
@@ -310,22 +364,6 @@ public class FieldUtil {
             }
         }
         return false;
-    }
-
-    /**
-     * 得到Class的所有字段
-     */
-//    public static List<FieldInfo> listFieldInfos(PsiClass psiClass) {
-//        List<FieldInfo> fieldInfos = new ArrayList<>();
-//        for (PsiField psiField : psiClass.getAllFields()) {
-//            fieldInfos.add(FieldFactory.buildField(psiField.getName(), psiField.getType(), DesUtil.getDescription(psiField), psiField.getAnnotations()));
-//        }
-//        return fieldInfos;
-//    }
-
-    /** 获得类型枚举 */
-    public static TypeEnum getTypeEnum(PsiParameter parameter) {
-        return getTypeEnum(parameter.getType());
     }
 
     /** 获得类型枚举 */

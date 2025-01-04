@@ -1,12 +1,14 @@
 package com.zhanglinwei.zTools.util;
 
-import com.intellij.psi.*;
-import com.zhanglinwei.zTools.constant.RequestMethodEnum;
-import com.zhanglinwei.zTools.constant.WebAnnotation;
-import com.zhanglinwei.zTools.model.FieldInfo;
-import com.zhanglinwei.zTools.model.RequestHeader;
+import com.intellij.psi.PsiAnnotation;
+import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiNameValuePair;
+import com.zhanglinwei.zTools.doc.apidoc.model.FieldInfo;
+import com.zhanglinwei.zTools.doc.apidoc.constant.RequestMethodEnum;
+import com.zhanglinwei.zTools.doc.apidoc.constant.WebAnnotation;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 注解工具类
@@ -148,7 +150,7 @@ public class AnnotationUtil {
             for (PsiNameValuePair psiNameValuePair : psiNameValuePairs) {
                 if (psiNameValuePair.getName().equals("value") || psiNameValuePair.getName().equals("path")) {
                     String text = psiNameValuePair.getValue().getText();
-                    if (AssertUtils.isNotBlank(text)) {
+                    if (AssertUtils.isBlank(text)) {
                         return "";
                     }
                     text = text.replace("{\"", "").replace("\"}", "").replace("\"", "");
@@ -162,8 +164,36 @@ public class AnnotationUtil {
         return "";
     }
 
-    public static List<RequestHeader> buildRequestHeaderByMappingAnnotation(PsiAnnotation methodRequestMappingAnnotation, PsiAnnotation classRequestMappingAnnotation) {
-        List<RequestHeader> headerList = new ArrayList<>();
+    public static String getOrDefaultAttrValueByAnnotation(PsiAnnotation annotation, String attributeName, String defaultValue) {
+        if (annotation != null) {
+            PsiNameValuePair[] attributes = annotation.getParameterList().getAttributes();
+            if (AssertUtils.isBlank(attributeName) || "value".equals(attributeName)) {
+                attributeName = "value";
+                if (attributes.length == 1 && attributes[0].getName() == null) {
+                    return attributes[0].getLiteralValue();
+                }
+            }
+
+            for (PsiNameValuePair pair : attributes) {
+                if (attributeName.equals(pair.getName())) {
+                    String literalValue = pair.getLiteralValue();
+                    if (AssertUtils.isNotBlank(literalValue)) {
+                        return literalValue;
+                    }
+                    String text = pair.getValue().getText();
+                    if (AssertUtils.isNotBlank(text)) {
+                        return text;
+                    }
+                    return literalValue;
+                }
+            }
+        }
+
+        return defaultValue;
+    }
+
+    public static List<FieldInfo> buildRequestHeaderByMappingAnnotation(PsiAnnotation methodRequestMappingAnnotation, PsiAnnotation classRequestMappingAnnotation) {
+        List<FieldInfo> headerList = new ArrayList<>();
 
         headerList.addAll(resolveConsumesAndProducesByMappingAnnotation(methodRequestMappingAnnotation));
         headerList.addAll(resolveConsumesAndProducesByMappingAnnotation(classRequestMappingAnnotation));
@@ -171,15 +201,8 @@ public class AnnotationUtil {
         return headerList;
     }
 
-    private static RequestHeader buildRequestHeader(String headerName, HashSet<String> headerValue, String required, String desc) {
-        if (AssertUtils.isEmpty(headerValue) || AssertUtils.isBlank(headerName)) {
-            return null;
-        }
-        return new RequestHeader(headerName, String.join(", ", headerValue), required, desc);
-    }
-
-    public static List<RequestHeader> resolveConsumesAndProducesByMappingAnnotation(PsiAnnotation mappingAnnotation) {
-        List<RequestHeader> headers = new ArrayList<>();
+    public static List<FieldInfo> resolveConsumesAndProducesByMappingAnnotation(PsiAnnotation mappingAnnotation) {
+        List<FieldInfo> headers = new ArrayList<>();
         if (mappingAnnotation != null) {
             PsiNameValuePair[] attributes = mappingAnnotation.getParameterList().getAttributes();
             for (PsiNameValuePair pair : attributes) {
@@ -193,7 +216,7 @@ public class AnnotationUtil {
         return headers;
     }
 
-    private static List<RequestHeader> resolveConsumes(PsiNameValuePair pair) {
+    private static List<FieldInfo> resolveConsumes(PsiNameValuePair pair) {
         if (pair == null) {
             return new ArrayList<>();
         }
@@ -201,7 +224,7 @@ public class AnnotationUtil {
         if (AssertUtils.isBlank(text)) {
             return new ArrayList<>();
         }
-        List<RequestHeader> consumesList = new ArrayList<>();
+        List<FieldInfo> consumesList = new ArrayList<>();
         text = text.replace("{", "").replace("}", "").replace("\"", "");
         if (text.contains(",")) {
             String[] split = text.split(",");
@@ -214,7 +237,7 @@ public class AnnotationUtil {
         return consumesList;
     }
 
-    private static List<RequestHeader> resolveProduces(PsiNameValuePair pair) {
+    private static List<FieldInfo> resolveProduces(PsiNameValuePair pair) {
         if (pair == null) {
             return new ArrayList<>();
         }
@@ -222,15 +245,15 @@ public class AnnotationUtil {
         if (AssertUtils.isBlank(text)) {
             return new ArrayList<>();
         }
-        List<RequestHeader> producesList = new ArrayList<>();
+        List<FieldInfo> producesList = new ArrayList<>();
         text = text.replace("{\"", "").replace("\"}", "").replace("\"", "");
         if (text.contains(",")) {
             String[] split = text.split(",");
             for (String item : split) {
-                producesList.add(buildRequestHeader("Accept", item));
+                producesList.add(buildRequestHeader("Accept", buildRequestHeaderValue(item)));
             }
         } else {
-            producesList.add(buildRequestHeader("Accept", text));
+            producesList.add(buildRequestHeader("Accept", buildRequestHeaderValue(text)));
         }
         return producesList;
     }
@@ -245,16 +268,12 @@ public class AnnotationUtil {
         return AssertUtils.isBlank(value) ? item : value;
     }
 
-    public static RequestHeader buildRequestHeaderByFieldInfo(FieldInfo field) {
-        return new RequestHeader(field.getName(), field.getRange(), field.getRequired(), field.getDesc());
-    }
-
-    public static RequestHeader buildRequestHeader(String headerName, String value) {
+    public static FieldInfo buildRequestHeader(String headerName, String value) {
         return buildRequestHeader(headerName, value, "Y", "");
     }
 
-    public static RequestHeader buildRequestHeader(String headerName, String value, String required, String desc) {
-        return new RequestHeader(headerName, value, required, desc);
+    public static FieldInfo buildRequestHeader(String headerName, String value, String required, String desc) {
+        return FieldInfo.build(headerName, value, required, desc);
     }
 
     /**
@@ -267,6 +286,15 @@ public class AnnotationUtil {
             }
         }
         return null;
+    }
+
+    /**
+     * 根据注解名称查找全部注解
+     */
+    public static List<PsiAnnotation> getAnnotationListByName(PsiAnnotation[] annotations, String annotationName) {
+        return Arrays.stream(annotations)
+                .filter(annotation -> annotation.getText().contains(annotationName))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -302,4 +330,5 @@ public class AnnotationUtil {
     public static PsiAnnotation getRequestPartAnnotation(PsiAnnotation[] annotations) {
         return getAnnotationByName(annotations, WebAnnotation.RequestPart);
     }
+
 }
